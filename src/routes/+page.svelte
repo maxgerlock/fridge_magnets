@@ -1,52 +1,17 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { cleanWord } from '$lib/utils/text';
+  import { loadWordBank, type WordBankSource } from '$lib/services/wordBankLoader';
+  
   let corpusInput = '';
   let words: string[] = [];
   let outputText = '';
   let shuffled = false;
   let showInput = true;
-
-  function cleanWord(word: string): string | null {
-    word = word.trim();
-    if (word.length === 0) return null;
-    
-    // Check if word contains internal periods (like "U.S.A." or "Dr.")
-    // An internal period is one that has letters/numbers on both sides
-    const hasInternalPeriods = /[A-Za-z0-9]\.[A-Za-z0-9]/.test(word);
-    
-    // Punctuation characters (excluding periods for now if it's an acronym)
-    const punctuationRegex = /[!"#$%&'()*+,\-/:;<=>?@\[\\\]^_`{|}~]/;
-    
-    // Remove leading punctuation
-    let i = 0;
-    while (i < word.length && punctuationRegex.test(word[i])) {
-      i++;
-    }
-    
-    // Remove trailing punctuation
-    let j = word.length - 1;
-    if (hasInternalPeriods) {
-      // For acronyms, only remove non-period punctuation
-      while (j >= i && punctuationRegex.test(word[j])) {
-        j--;
-      }
-    } else {
-      // For regular words, remove all punctuation including periods
-      while (j >= i && /[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~]/.test(word[j])) {
-        j--;
-      }
-    }
-    
-    // Extract the cleaned word
-    const cleaned = word.slice(i, j + 1);
-    
-    if (cleaned.length === 0) return null;
-    
-    // Convert to lowercase
-    return cleaned.toLowerCase();
-  }
+  let isLoading = false;
+  let wordBankSource: WordBankSource = 'shakespeare';
 
   function processCorpus() {
-    // Split by whitespace, clean each word, and collect unique words
     const wordSet = new Set<string>();
     
     corpusInput
@@ -54,16 +19,16 @@
       .forEach(token => {
         const cleaned = cleanWord(token);
         if (cleaned && cleaned.length > 0) {
-          wordSet.add(cleaned);
+          if (!/<[^>]*/.test(cleaned) && !/>/.test(cleaned) && !/&[a-z]+;/.test(cleaned)) {
+            wordSet.add(cleaned);
+          }
         }
       });
     
-    // Convert Set to Array and sort for consistent ordering
     words = Array.from(wordSet).sort();
     shuffled = false;
-    showInput = false; // Hide input section after processing
+    showInput = false;
     
-    // Automatically shuffle the words after processing
     shuffleWords();
   }
 
@@ -80,7 +45,6 @@
   }
 
   function shuffleWords() {
-    // Fisher-Yates shuffle algorithm
     const shuffledWords = [...words];
     for (let i = shuffledWords.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -93,6 +57,23 @@
   function clearOutput() {
     outputText = '';
   }
+
+  async function loadRandomWords() {
+    isLoading = true;
+    try {
+      corpusInput = await loadWordBank(wordBankSource);
+      processCorpus();
+    } catch (error) {
+      console.error('Error loading words:', error);
+      showInput = true;
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  onMount(() => {
+    loadRandomWords();
+  });
 </script>
 
 <div class="container">
@@ -102,17 +83,49 @@
 
   {#if showInput || words.length === 0}
     <div class="input-section">
-      <label for="corpus-input" class="label">Enter your corpus of words:</label>
-      <textarea
-        id="corpus-input"
-        class="corpus-input"
-        bind:value={corpusInput}
-        placeholder="Type words separated by spaces, or paste text here..."
-        rows="4"
-      ></textarea>
-      <button class="button button-primary" on:click={processCorpus}>
-        Process Corpus
-      </button>
+      {#if isLoading}
+        <div class="loading-message">Loading words...</div>
+      {:else}
+        <div class="word-bank-config">
+          <fieldset>
+            <legend class="label">Word Bank Source:</legend>
+            <div class="radio-group">
+              <label class="radio-label">
+                <input
+                  type="radio"
+                  name="wordBankSource"
+                  value="shakespeare"
+                  bind:group={wordBankSource}
+                />
+                <span>Shakespeare + Random Words</span>
+              </label>
+              <label class="radio-label">
+                <input
+                  type="radio"
+                  name="wordBankSource"
+                  value="random"
+                  bind:group={wordBankSource}
+                />
+                <span>Random Words Only</span>
+              </label>
+            </div>
+          </fieldset>
+          <button class="button button-secondary" on:click={loadRandomWords}>
+            Generate Word Bank
+          </button>
+        </div>
+        <label for="corpus-input" class="label">Enter your word bank:</label>
+        <textarea
+          id="corpus-input"
+          class="corpus-input"
+          bind:value={corpusInput}
+          placeholder="Type words separated by spaces, or paste text here..."
+          rows="4"
+        ></textarea>
+        <button class="button button-primary" on:click={processCorpus}>
+          Process Word Bank
+        </button>
+      {/if}
     </div>
   {/if}
 
@@ -136,6 +149,9 @@
             </button>
           {/each}
         </div>
+        <div class="word-count">
+          {words.length} {words.length === 1 ? 'word' : 'words'} in word bank
+        </div>
       </div>
 
       <div class="output-pane">
@@ -158,7 +174,7 @@
   {#if !showInput && words.length > 0}
     <div class="input-toggle">
       <button class="button button-link" on:click={toggleInput}>
-        Edit Corpus
+        Edit Word Bank
       </button>
     </div>
   {/if}
@@ -183,13 +199,10 @@
     text-align: center;
     margin-bottom: 1rem;
     padding-bottom: 0.75rem;
-    /* border-bottom: 2px solid var(--color-text); */
     position: relative;
   }
 
-
   .header h1 {
-    /* font-family: futura; */
     background: transparent;
     font-family: "Futura-PT", "Gill Sans", "Century Gothic", sans-serif;
     margin: 0;
@@ -215,6 +228,68 @@
 
   .input-section {
     margin-bottom: 2rem;
+  }
+
+  .loading-message {
+    text-align: center;
+    padding: 2rem;
+    color: var(--color-text);
+    font-size: 1.1rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .word-bank-config {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    border: 1px solid var(--color-text);
+    background: var(--color-background);
+  }
+
+  .word-bank-config fieldset {
+    border: none;
+    padding: 0;
+    margin: 0 0 1rem 0;
+  }
+
+  .word-bank-config legend {
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    color: var(--color-text);
+    font-size: 1.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .radio-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 1rem;
+    color: var(--color-text);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .radio-label input[type="radio"] {
+    width: 1.25rem;
+    height: 1.25rem;
+    cursor: pointer;
+    accent-color: var(--color-accent);
+  }
+
+  .radio-label span {
+    user-select: none;
   }
 
   .input-toggle {
@@ -375,6 +450,17 @@
     overflow-y: auto;
     flex: 1;
     align-content: flex-start;
+  }
+
+  .word-count {
+    margin-top: 1rem;
+    text-align: center;
+    color: var(--color-text);
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.8;
   }
 
   .magnet {
