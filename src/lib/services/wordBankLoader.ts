@@ -1,21 +1,24 @@
 import { fetchShakespeareText } from '../api/shakespeare';
 import { fetchRandomWords } from '../api/randomWords';
 
-export type WordBankSource = 'shakespeare' | 'random';
+export interface WordBankOptions {
+  includeShakespeare: boolean;
+  includeRandom: boolean;
+}
 
-export async function loadWordBank(source: WordBankSource): Promise<string> {
-  let shakespeareText = '';
+export async function loadWordBank(options: WordBankOptions): Promise<string> {
+  const parts: string[] = [];
   
-  if (source === 'shakespeare') {
-    shakespeareText = await fetchShakespeareText(100);
+  if (options.includeShakespeare) {
+    const shakespeareText = await fetchShakespeareText(100);
+    parts.push(shakespeareText);
   }
   
-  const randomWords = await fetchRandomWords(100);
-  
-  if (source === 'shakespeare') {
-    return shakespeareText + ' ' + randomWords.join(' ');
-  } else {
-    return randomWords.join(' ');
+  if (options.includeRandom) {
+    const randomWords = await fetchRandomWords(100);
+    parts.push(randomWords.join(' '));
   }
+  
+  return parts.join(' ');
 }
 

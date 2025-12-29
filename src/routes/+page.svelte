@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { cleanWord } from '$lib/utils/text';
-  import { loadWordBank, type WordBankSource } from '$lib/services/wordBankLoader';
+  import { loadWordBank } from '$lib/services/wordBankLoader';
   
   let corpusInput = '';
   let words: string[] = [];
@@ -9,7 +9,8 @@
   let shuffled = false;
   let showInput = true;
   let isLoading = false;
-  let wordBankSource: WordBankSource = 'shakespeare';
+  let includeShakespeare = true;
+  let includeRandom = true;
 
   function processCorpus() {
     const wordSet = new Set<string>();
@@ -61,7 +62,10 @@
   async function loadRandomWords() {
     isLoading = true;
     try {
-      corpusInput = await loadWordBank(wordBankSource);
+      corpusInput = await loadWordBank({
+        includeShakespeare,
+        includeRandom
+      });
       processCorpus();
     } catch (error) {
       console.error('Error loading words:', error);
@@ -88,29 +92,35 @@
       {:else}
         <div class="word-bank-config">
           <fieldset>
-            <legend class="label">Word Bank Source:</legend>
-            <div class="radio-group">
-              <label class="radio-label">
+            <legend class="label">Word Bank Sources:</legend>
+            <div class="checkbox-group">
+              <label class="checkbox-label">
                 <input
-                  type="radio"
-                  name="wordBankSource"
-                  value="shakespeare"
-                  bind:group={wordBankSource}
+                  type="checkbox"
+                  checked={includeShakespeare}
+                  on:change={(e) => {
+                    includeShakespeare = e.currentTarget.checked;
+                  }}
                 />
-                <span>Shakespeare + Random Words</span>
+                <span>Shakespeare Words</span>
               </label>
-              <label class="radio-label">
+              <label class="checkbox-label">
                 <input
-                  type="radio"
-                  name="wordBankSource"
-                  value="random"
-                  bind:group={wordBankSource}
+                  type="checkbox"
+                  checked={includeRandom}
+                  on:change={(e) => {
+                    includeRandom = e.currentTarget.checked;
+                  }}
                 />
-                <span>Random Words Only</span>
+                <span>Random Words</span>
               </label>
             </div>
           </fieldset>
-          <button class="button button-secondary" on:click={loadRandomWords}>
+          <button 
+            class="button button-secondary" 
+            on:click={loadRandomWords}
+            disabled={!includeShakespeare && !includeRandom}
+          >
             Generate Word Bank
           </button>
         </div>
@@ -262,14 +272,14 @@
     letter-spacing: 0.05em;
   }
 
-  .radio-group {
+  .checkbox-group {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
     margin-bottom: 1rem;
   }
 
-  .radio-label {
+  .checkbox-label {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -281,14 +291,14 @@
     letter-spacing: 0;
   }
 
-  .radio-label input[type="radio"] {
+  .checkbox-label input[type="checkbox"] {
     width: 1.25rem;
     height: 1.25rem;
     cursor: pointer;
     accent-color: var(--color-accent);
   }
 
-  .radio-label span {
+  .checkbox-label span {
     user-select: none;
   }
 
@@ -372,6 +382,17 @@
   .button-secondary:hover {
     background: var(--color-text);
     color: var(--color-background);
+    border-color: var(--color-text);
+  }
+
+  .button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .button:disabled:hover {
+    background: var(--color-background);
+    color: var(--color-text);
     border-color: var(--color-text);
   }
 
